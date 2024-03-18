@@ -2,40 +2,44 @@ from PIL import Image
 import torch
 from kornia import augmentation
 import numpy as np
-
-# Open the TIFF file
-image = Image.open("../data/airplane00.tif")
-
-# Display some information about the image
-print("Image format:", image.format)
-print("Image size:", image.size)
-print("Image mode:", image.mode)
-
-# Display the image
-image.show()
-
-image_np = np.array(image)
-
-input_tensor = torch.from_numpy(image_np)
-input_tensor = input_tensor.float()
-input_tensor = input_tensor / 255.0
-
-input_tensor = input_tensor.permute(2, 0, 1).unsqueeze(0)
+import time
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 
 
-# Horizontal Flip
-# seq = augmentation.RandomHorizontalFlip(p=1.0)
-# Vertical Flip
-# seq = augmentation.RandomVerticalFlip(p=1.0)
-# Rotation
-# seq = augmentation.RandomRotation(degrees=[90.0, 90.0], p=1.0)
-# Gaussian Noise
-seq = augmentation.RandomGaussianNoise(mean=0.0, std=0.1, p=1.0)
+from augmentations import *
+from utils import *
 
-output = seq(input_tensor)
+def main():
+    device, on_gpu = cuda_setup('cpu')
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
 
-output = output.squeeze(0).permute(1, 2, 0)
-output = output * 255.0
+    preprocess = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
 
-output_pil = Image.fromarray(output.numpy().astype(np.uint8))
-output_pil.show()
+    dataset = datasets.CIFAR10(root='../data/cifar10', train=True, transform=preprocess, download=True)
+
+    img, smnt = dataset[0]
+
+    # Apply preprocessing transforms to the image
+    input_tensor = img.to(device)
+    # input_tensor = tif_to_tensor("../data/airplane00.tif", device, on_gpu) 
+
+    seq = get_augmentation(augmentation_name='RandomGaussianNoise', p=1.0)
+    start_event.record()
+    output = seq(input_tensor)
+    end_event.record()
+    torch.cuda.synchronize() 
+
+    output_pil = tensor_to_tif(output)
+    output_pil.show()
+
+    elapsed_time_ms = start_event.elapsed_time(end_event)
+    print(f"Augmentation time on GPU: {elapsed_time_ms:.2f} ms")
+
+
+if __name__ == "__main__":
+    main()
