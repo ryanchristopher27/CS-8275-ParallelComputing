@@ -24,10 +24,10 @@ def cuda_setup(d='gpu') -> tuple:
     return device, on_gpu
 
 
-def tif_to_tensor(image_path: str, device: torch.device, on_gpu: bool):
+def image_to_tensor(image: Image, device: torch.device, on_gpu: bool):
 
     # Open the TIFF file
-    image = Image.open("../data/airplane00.tif")
+    # image = Image.open("../data/airplane00.tif")
 
     # Display some information about the image
     # print("Image format:", image.format)
@@ -50,13 +50,18 @@ def tif_to_tensor(image_path: str, device: torch.device, on_gpu: bool):
     return input_tensor
 
 
-def tensor_to_tif(output_tensor: torch.Tensor):
+def tensor_to_image(output_tensor: torch.Tensor):
 
     output_tensor = output_tensor.cpu()
 
     output_tensor = output_tensor.squeeze(0).permute(1, 2, 0)
     output_tensor = output_tensor * 255.0
 
-    output_pil = Image.fromarray(output_tensor.numpy().astype(np.uint8))
+    output_image = Image.fromarray(output_tensor.numpy().astype(np.uint8))
 
-    return output_pil
+    return output_image
+
+
+# def data_preprocessing(image: any, input_type: str, output_type: str):
+#     if input_type == 'tif':
+
