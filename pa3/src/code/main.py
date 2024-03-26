@@ -18,8 +18,14 @@ def main():
 
     # augmentation_experiment()
     # cupy_test()
-    # single_augmentation_exp('RandomRotation') # 'RandomRotation'
-    cifar10_augmentation_exp('RandomRotation')
+    # augs = ['RandomRotation', 'RandomVerticalFlip', 'RandomHorizontalFlip', 'RandomGaussianNoise']
+    augs = ['RandomVerticalFlip', 'RandomHorizontalFlip', 'RandomGaussianNoise']
+    # single_augmentation_exp('RandomGaussianNoise') 
+    # single_augmentation_n_runs_exp('RandomGaussianNoise', 100)
+    # cifar10_augmentation_exp('RandomRotation')
+
+    for aug in augs:
+        cifar10_augmentation_exp(aug)
 
 def augmentation_experiment():
     device, on_gpu = cuda_setup('gpu')
@@ -75,7 +81,7 @@ def single_augmentation_exp(augmentation_type :str):
     kornia_output = tensor_to_image(output_kornia)
 
     kornia_time = start_kornia.elapsed_time(end_kornia)
-    print(f"Kornia time on GPU: {kornia_time:.2f} ms")
+    print(f"Kornia time on GPU: {kornia_time:.4f} ms")
 
     # ======================================================================
     # Cupy Section
@@ -84,17 +90,20 @@ def single_augmentation_exp(augmentation_type :str):
     end_cupy = torch.cuda.Event(enable_timing=True)
 
     cupy_image = cp.asarray(input_image)
+    # print(cp.asnumpy(cupy_image))
     angle = 90
+    seq = get_cupy_augmentation(augmentation_name=augmentation_type)
     start_cupy.record()
-    output_cupy = ndimage.rotate(cupy_image, angle, reshape=False)
+    output_cupy = seq(cupy_image)
     end_cupy.record()
     torch.cuda.synchronize() 
 
-    output_np_cupy = cp.asnumpy(output_cupy)
+    output_np_cupy = cp.asnumpy(output_cupy).astype(np.uint8)
+    # print(output_np_cupy)
     cupy_output = Image.fromarray(output_np_cupy)
 
     cupy_time = start_cupy.elapsed_time(end_cupy)
-    print(f"Cupy time on GPU: {cupy_time:.2f} ms")
+    print(f"Cupy time on GPU: {cupy_time:.4f} ms")
 
     # ======================================================================
     # Display Section
@@ -111,6 +120,56 @@ def single_augmentation_exp(augmentation_type :str):
 
     plt.tight_layout()
     plt.show()
+
+
+def single_augmentation_n_runs_exp(augmentation_type :str, num_runs :int):
+    device, on_gpu = cuda_setup('cpu')
+
+    input_image = Image.open("../data/airplane00.tif")
+    input_tensor = image_to_tensor(input_image, device, on_gpu) 
+
+    total_kornia_time = 0
+    total_cupy_time = 0
+
+    for i in tqdm(range(num_runs), desc="Processing Images"):
+        # ======================================================================
+        # Kornia Section
+        # ======================================================================
+        start_kornia = torch.cuda.Event(enable_timing=True)
+        end_kornia = torch.cuda.Event(enable_timing=True)
+
+        seq = get_kornia_augmentation(augmentation_name=augmentation_type)
+        start_kornia.record()
+        output_kornia = seq(input_tensor)
+        end_kornia.record()
+        torch.cuda.synchronize() 
+
+        kornia_time = start_kornia.elapsed_time(end_kornia)
+        total_kornia_time += kornia_time
+
+        # ======================================================================
+        # Cupy Section
+        # ======================================================================
+        start_cupy = torch.cuda.Event(enable_timing=True)
+        end_cupy = torch.cuda.Event(enable_timing=True)
+
+        cupy_image = cp.asarray(input_image)
+        angle = 90
+        seq = get_cupy_augmentation(augmentation_name=augmentation_type)
+        start_cupy.record()
+        output_cupy = seq(cupy_image)
+        # output_cupy = ndimage.rotate(cupy_image, angle, reshape=False)
+        end_cupy.record()
+        torch.cuda.synchronize() 
+
+        cupy_time = start_cupy.elapsed_time(end_cupy)
+        total_cupy_time += cupy_time
+
+    # Calculate average times
+    avg_kornia_time = total_kornia_time / num_runs
+    avg_cupy_time = total_cupy_time / num_runs
+    print(f"Average Kornia time on GPU: {avg_kornia_time:.4f} ms")
+    print(f"Average Cupy time on GPU: {avg_cupy_time:.4f} ms\n")
 
 
 def cifar10_augmentation_exp(augmentation_type: str):
@@ -157,8 +216,9 @@ def cifar10_augmentation_exp(augmentation_type: str):
 
         cupy_image = cp.asarray(input_image.permute(1, 2, 0).numpy())
         angle = 90
+        seq = get_cupy_augmentation(augmentation_name=augmentation_type)
         start_cupy.record()
-        output_cupy = ndimage.rotate(cupy_image, angle, reshape=False)
+        output_cupy = seq(cupy_image)
         end_cupy.record()
         torch.cuda.synchronize()
 
