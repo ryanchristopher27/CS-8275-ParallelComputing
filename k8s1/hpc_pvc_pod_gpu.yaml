@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: rdcb2f-pvc-pod-b
+
+spec:
+  containers:
+    - name: rdcb2f-pvc-pod-b-con
+      image: rchristopher27/k8s1:partb
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]
+      resources:
+        limits:
+          memory: 12Gi
+          cpu: 2
+          nvidia.com/gpu: 1
+        requests:
+          memory: 12Gi
+          cpu: 2
+          nvidia.com/gpu: 1
+      volumeMounts:
+        - mountPath: /workspace
+          name: rdcb2f-hpc-pvc
+        - mountPath: /dev/shm
+          name: dshm
+  volumes:
+    - name: rdcb2f-hpc-pvc
+      persistentVolumeClaim:
+        claimName: rdcb2f-hpc-pvc
+    - name: dshm
+      emptyDir:
+        medium: Memory
+
+  # Tolerations are the overrides for established taints in a k8s cluster. For this course, the nautilus.io/mizzou= taint was applied, which as no value for the key. This allows us to override this
+  # If you have time, try to delete this and schedule your pod, you should see the pod being stuck in pending. This was what I was mentioning within class
+  tolerations:
+  - key: "nautilus.io/mizzou"
+    operator: "Exists"
+    effect: "NoSchedule"
+  
+  # Affinity allows you to define the policies towards assigning a pod to a node. There are many ways to do this (note the - indications, which allow for multiple entries)
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+
+        # nodeSelectorTerms operates as an OR operator, so long as any term fits, it will assign
+        nodeSelectorTerms:
+        - matchExpressions:
+          # key/values pairs work logically as an AND operator, so all terms would have to match
+
+          # nodeName works well as an alternative. With a required affinity, you are given more flexibility (especially to avoid nodes), so I've chosen this insead
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - gpn-fiona-mizzou-4.rnet.missouri.edu
+
+          # If you want to select all nodes matching the MIG resources, you may use this, and remove the hostname. You may additionally add more GPUs to this list, and build a more comprehensive profile
+          # - key: nvidia.com/gpu.product
+          #   operator: In
+          #   values:
+          #   - NVIDIA-A100-80GB-PCIe-MIG-1g.10gb
